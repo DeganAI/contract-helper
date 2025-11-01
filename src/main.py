@@ -209,6 +209,15 @@ async def root():
     return HTMLResponse(content=html_content)
 
 
+@app.get("/favicon.ico")
+async def favicon():
+    """Favicon endpoint"""
+    from fastapi.responses import Response
+    # Return SVG favicon
+    svg_content = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="90">🔧</text></svg>'
+    return Response(content=svg_content, media_type="image/svg+xml")
+
+
 @app.get("/health")
 async def health():
     """Health check endpoint"""
