@@ -9,6 +9,7 @@ from typing import List, Optional, Any
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from dotenv import load_dotenv
 
@@ -150,6 +151,21 @@ async def health():
         "version": "1.0.0",
         "free_mode": FREE_MODE
     }
+
+
+@app.get("/entrypoints/contract-helper/invoke")
+@app.head("/entrypoints/contract-helper/invoke")
+async def contract_helper_invoke_get():
+    """GET/HEAD handler for x402 metadata discovery"""
+    return JSONResponse(
+        status_code=200,
+        content={
+            "service": "contract-helper",
+            "description": "Decode calldata, encode function calls, lookup signatures",
+            "operations": ["decode", "encode", "lookup"],
+            "resource": f"{base_url}/entrypoints/contract-helper/invoke"
+        }
+    )
 
 
 @app.post("/entrypoints/contract-helper/invoke")
