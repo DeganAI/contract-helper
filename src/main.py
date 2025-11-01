@@ -246,6 +246,39 @@ async def contract_helper_invoke_get():
                 "payTo": payment_address,
                 "maxTimeoutSeconds": 30,
                 "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",  # USDC on Base
+                "outputSchema": {
+                    "input": {
+                        "type": "http",
+                        "method": "POST",
+                        "bodyType": "json",
+                        "bodyFields": {
+                            "calldata": {
+                                "type": "string",
+                                "required": False,
+                                "description": "Hex-encoded calldata to decode"
+                            },
+                            "function_signature": {
+                                "type": "string",
+                                "required": False,
+                                "description": "Function signature for encoding (e.g., 'transfer(address,uint256)')"
+                            },
+                            "parameters": {
+                                "type": "array",
+                                "required": False,
+                                "description": "Function parameters for encoding"
+                            },
+                            "selector": {
+                                "type": "string",
+                                "required": False,
+                                "description": "4-byte function selector to lookup (e.g., '0xa9059cbb')"
+                            }
+                        }
+                    },
+                    "output": {
+                        "type": "object",
+                        "description": "Decoded calldata, encoded function, or signature lookup result"
+                    }
+                }
             }
         ]
     }
