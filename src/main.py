@@ -156,16 +156,24 @@ async def health():
 @app.get("/entrypoints/contract-helper/invoke")
 @app.head("/entrypoints/contract-helper/invoke")
 async def contract_helper_invoke_get():
-    """GET/HEAD handler for x402 metadata discovery"""
-    return JSONResponse(
-        status_code=200,
-        content={
-            "service": "contract-helper",
-            "description": "Decode calldata, encode function calls, lookup signatures",
-            "operations": ["decode", "encode", "lookup"],
-            "resource": f"{base_url}/entrypoints/contract-helper/invoke"
-        }
-    )
+    """x402 discovery endpoint - returns HTTP 402 with payment requirements"""
+    metadata = {
+        "x402Version": 1,
+        "accepts": [
+            {
+                "scheme": "exact",
+                "network": "base",
+                "maxAmountRequired": "20000",  # 0.02 USDC
+                "resource": f"{base_url}/entrypoints/contract-helper/invoke",
+                "description": "Decode calldata, encode function calls, and lookup signatures",
+                "mimeType": "application/json",
+                "payTo": payment_address,
+                "maxTimeoutSeconds": 30,
+                "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",  # USDC on Base
+            }
+        ]
+    }
+    return JSONResponse(content=metadata, status_code=402)
 
 
 @app.post("/entrypoints/contract-helper/invoke")
