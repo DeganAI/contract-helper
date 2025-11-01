@@ -142,6 +142,73 @@ class ContractHelperRequest(BaseModel):
 
 
 # API Endpoints
+@app.get("/")
+@app.head("/")
+async def root():
+    """Landing page with metadata"""
+    from fastapi.responses import HTMLResponse
+    html_content = f"""
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Smart Contract Interaction Helper - x402 Microservice</title>
+        <meta name="description" content="Decode calldata, encode function calls, and lookup signatures via x402 micropayments">
+        <meta property="og:title" content="Smart Contract Interaction Helper">
+        <meta property="og:description" content="Decode calldata, encode function calls, and lookup signatures via x402 micropayments">
+        <meta property="og:image" content="https://contract-helper-production.up.railway.app/favicon.ico">
+        <link rel="icon" type="image/x-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔧</text></svg>">
+        <style>
+            * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+            body {{
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+                background: linear-gradient(135deg, #1a0a2e 0%, #16213e 50%, #0f3460 100%);
+                color: #e8f0f2;
+                line-height: 1.6;
+                min-height: 100vh;
+                padding: 20px;
+            }}
+            .container {{ max-width: 900px; margin: 0 auto; }}
+            h1 {{ color: #ffbf00; font-size: 2.5em; margin-bottom: 10px; }}
+            .subtitle {{ color: #ffd89c; font-size: 1.2em; margin-bottom: 20px; }}
+            .endpoint {{ background: rgba(22, 33, 62, 0.8); border: 1px solid rgba(255, 191, 0, 0.3); border-radius: 12px; padding: 20px; margin: 15px 0; }}
+            .code {{ background: rgba(0, 0, 0, 0.3); padding: 10px; border-radius: 6px; font-family: monospace; margin: 10px 0; }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h1>🔧 Smart Contract Interaction Helper</h1>
+            <p class="subtitle">Decode calldata, encode function calls, and lookup signatures</p>
+
+            <div class="endpoint">
+                <h2>x402 Endpoint</h2>
+                <div class="code">{base_url}/entrypoints/contract-helper/invoke</div>
+                <p>Operations: decode, encode, lookup</p>
+                <p>Payment: 0.02 USDC on Base</p>
+            </div>
+
+            <div class="endpoint">
+                <h3>Decode</h3>
+                <pre class="code">{{"calldata": "0xa9059cbb..."}}</pre>
+            </div>
+
+            <div class="endpoint">
+                <h3>Encode</h3>
+                <pre class="code">{{"function_signature": "transfer(address,uint256)", "parameters": ["0x...", 1000]}}</pre>
+            </div>
+
+            <div class="endpoint">
+                <h3>Lookup</h3>
+                <pre class="code">{{"selector": "0xa9059cbb"}}</pre>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+    return HTMLResponse(content=html_content)
+
+
 @app.get("/health")
 async def health():
     """Health check endpoint"""
