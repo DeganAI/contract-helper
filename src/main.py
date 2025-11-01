@@ -120,30 +120,22 @@ class SignatureLookupRequest(BaseModel):
         }
 
 
-class InvokeRequest(BaseModel):
-    """Unified invoke request"""
-    action: str = Field(..., description="Action to perform: 'decode', 'encode', or 'lookup'")
-    calldata: Optional[str] = Field(None, description="For decode: hex-encoded calldata")
-    function_signature: Optional[str] = Field(None, description="For encode: function signature")
-    parameters: Optional[List[Any]] = Field(None, description="For encode: function parameters")
-    selector: Optional[str] = Field(None, description="For lookup: 4-byte function selector")
+class ContractHelperRequest(BaseModel):
+    """Unified contract helper request - accepts decode, encode, or lookup params"""
+    # Decode params
+    calldata: Optional[str] = Field(None, description="Hex-encoded calldata to decode")
+    # Encode params
+    function_signature: Optional[str] = Field(None, description="Function signature for encoding")
+    parameters: Optional[List[Any]] = Field(None, description="Function parameters for encoding")
+    # Lookup params
+    selector: Optional[str] = Field(None, description="4-byte function selector to lookup")
 
     class Config:
         json_schema_extra = {
             "examples": [
-                {
-                    "action": "decode",
-                    "calldata": "0xa9059cbb000000000000000000000000742d35Cc6634C0532925a3b844Bc9e7595f0bEb00000000000000000000000000000000000000000000000000de0b6b3a7640000"
-                },
-                {
-                    "action": "encode",
-                    "function_signature": "transfer(address,uint256)",
-                    "parameters": ["0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb0", 1000000000000000000]
-                },
-                {
-                    "action": "lookup",
-                    "selector": "0xa9059cbb"
-                }
+                {"calldata": "0xa9059cbb000000000000000000000000742d35Cc6634C0532925a3b844Bc9e7595f0bEb00000000000000000000000000000000000000000000000000de0b6b3a7640000"},
+                {"function_signature": "transfer(address,uint256)", "parameters": ["0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb0", 1000000000000000000]},
+                {"selector": "0xa9059cbb"}
             ]
         }
 
@@ -160,133 +152,50 @@ async def health():
     }
 
 
-@app.post(
-    "/entrypoints/decode/invoke",
-    summary="Decode Transaction Calldata",
-    description="Decode transaction calldata into human-readable format with parameter extraction"
-)
-async def decode_calldata(request: DecodeRequest):
+@app.post("/entrypoints/contract-helper/invoke")
+async def contract_helper_invoke(request: ContractHelperRequest):
     """
-    Decode transaction calldata
+    Unified contract helper endpoint
 
-    This endpoint:
-    - Extracts function selector
-    - Looks up function signature from 4byte.directory
-    - Decodes parameters using ABI encoding
-    - Returns human-readable description
-
-    Returns:
-    - Function name and signature
-    - Decoded parameters with names and types
-    - Human-readable description
-    - Raw data if decoding fails
-
-    Useful for:
-    - Understanding what a transaction does
-    - Debugging contract interactions
-    - Analyzing on-chain activity
-    - Building transaction explorers
+    Automatically detects operation based on provided fields:
+    - calldata: Decode transaction calldata
+    - function_signature + parameters: Encode function call
+    - selector: Lookup function signature
     """
     try:
-        logger.info(f"Decoding calldata: {request.calldata[:20]}...")
+        # Decode operation
+        if request.calldata:
+            logger.info(f"Decoding calldata: {request.calldata[:20]}...")
+            result = await calldata_decoder.decode_calldata(request.calldata)
+            return result
 
-        result = await calldata_decoder.decode_calldata(request.calldata)
+        # Encode operation
+        elif request.function_signature and request.parameters is not None:
+            logger.info(f"Encoding function: {request.function_signature}")
+            result = function_encoder.encode_function_call(request.function_signature, request.parameters)
+            if "error" in result:
+                raise HTTPException(status_code=400, detail=result["error"])
+            return result
 
-        return result
+        # Lookup operation
+        elif request.selector:
+            logger.info(f"Looking up selector: {request.selector}")
+            result = await signature_lookup.lookup_signature(request.selector)
+            if not result:
+                raise HTTPException(status_code=404, detail=f"Signature not found for selector: {request.selector}")
+            return result
 
-    except Exception as e:
-        logger.error(f"Decode error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Decode failed: {str(e)}")
-
-
-@app.post(
-    "/entrypoints/encode/invoke",
-    summary="Encode Function Call",
-    description="Encode function call into calldata from signature and parameters"
-)
-async def encode_function(request: EncodeRequest):
-    """
-    Encode function call into calldata
-
-    This endpoint:
-    - Calculates function selector from signature
-    - Encodes parameters using ABI encoding
-    - Returns complete calldata ready for transaction
-
-    Returns:
-    - Complete calldata (selector + encoded params)
-    - Function selector
-    - Encoding metadata
-
-    Useful for:
-    - Building contract transactions
-    - Creating multicalls
-    - Batch operations
-    - Testing contract interactions
-    """
-    try:
-        logger.info(f"Encoding function: {request.function_signature}")
-
-        result = function_encoder.encode_function_call(
-            request.function_signature,
-            request.parameters
-        )
-
-        if "error" in result:
-            raise HTTPException(status_code=400, detail=result["error"])
-
-        return result
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Encode error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Encode failed: {str(e)}")
-
-
-@app.post(
-    "/entrypoints/lookup/invoke",
-    summary="Lookup Function Signature",
-    description="Look up function signature by 4-byte selector"
-)
-async def lookup_signature(request: SignatureLookupRequest):
-    """
-    Look up function signature by selector
-
-    This endpoint:
-    - Queries 4byte.directory database
-    - Returns function signature and parameter types
-    - Includes common function cache for speed
-
-    Returns:
-    - Function name
-    - Full signature
-    - Parameter types
-
-    Useful for:
-    - Understanding unknown function selectors
-    - Contract reverse engineering
-    - Transaction analysis
-    - Building decoders
-    """
-    try:
-        logger.info(f"Looking up selector: {request.selector}")
-
-        result = await signature_lookup.lookup_signature(request.selector)
-
-        if not result:
+        else:
             raise HTTPException(
-                status_code=404,
-                detail=f"Signature not found for selector: {request.selector}"
+                status_code=400,
+                detail="Invalid request. Provide either: calldata (decode), function_signature+parameters (encode), or selector (lookup)"
             )
 
-        return result
-
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Lookup error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Lookup failed: {str(e)}")
+        logger.error(f"Contract helper error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Operation failed: {str(e)}")
 
 
 # Agent Discovery Endpoints
@@ -314,72 +223,24 @@ async def agent_metadata():
         "defaultInputModes": ["application/json"],
         "defaultOutputModes": ["application/json"],
         "entrypoints": {
-            "decode": {
-                "description": "Decode transaction calldata into human-readable format",
+            "contract-helper": {
+                "description": "Decode calldata, encode function calls, and lookup signatures. Provide calldata (decode), function_signature+parameters (encode), or selector (lookup)",
                 "streaming": False,
                 "input_schema": {
                     "$schema": "https://json-schema.org/draft/2020-12/schema",
                     "type": "object",
                     "properties": {
-                        "calldata": {"type": "string"}
-                    },
-                    "required": ["calldata"]
+                        "calldata": {"type": "string", "description": "Hex calldata to decode"},
+                        "function_signature": {"type": "string", "description": "Function signature to encode"},
+                        "parameters": {"type": "array", "description": "Parameters for encoding"},
+                        "selector": {"type": "string", "description": "4-byte selector to lookup"}
+                    }
                 },
                 "output_schema": {
                     "$schema": "https://json-schema.org/draft/2020-12/schema",
-                    "type": "object",
-                    "properties": {
-                        "function_name": {"type": "string"},
-                        "signature": {"type": "string"},
-                        "parameters": {"type": "array"},
-                        "human_readable": {"type": "string"}
-                    }
+                    "type": "object"
                 },
                 "pricing": {"invoke": "0.02 USDC"}
-            },
-            "encode": {
-                "description": "Encode function call from signature and parameters",
-                "streaming": False,
-                "input_schema": {
-                    "$schema": "https://json-schema.org/draft/2020-12/schema",
-                    "type": "object",
-                    "properties": {
-                        "function_signature": {"type": "string"},
-                        "parameters": {"type": "array"}
-                    },
-                    "required": ["function_signature", "parameters"]
-                },
-                "output_schema": {
-                    "$schema": "https://json-schema.org/draft/2020-12/schema",
-                    "type": "object",
-                    "properties": {
-                        "calldata": {"type": "string"},
-                        "function_selector": {"type": "string"}
-                    }
-                },
-                "pricing": {"invoke": "0.02 USDC"}
-            },
-            "lookup": {
-                "description": "Look up function signature by selector",
-                "streaming": False,
-                "input_schema": {
-                    "$schema": "https://json-schema.org/draft/2020-12/schema",
-                    "type": "object",
-                    "properties": {
-                        "selector": {"type": "string"}
-                    },
-                    "required": ["selector"]
-                },
-                "output_schema": {
-                    "$schema": "https://json-schema.org/draft/2020-12/schema",
-                    "type": "object",
-                    "properties": {
-                        "name": {"type": "string"},
-                        "signature": {"type": "string"},
-                        "params": {"type": "array"}
-                    }
-                },
-                "pricing": {"invoke": "0.01 USDC"}
             }
         },
         "payments": [
@@ -407,34 +268,12 @@ async def x402_metadata():
                 "scheme": "exact",
                 "network": "base",
                 "maxAmountRequired": "20000",  # 0.02 USDC
-                "resource": f"{base_url}/entrypoints/decode/invoke",
-                "description": "Decode transaction calldata with signature lookup and parameter extraction",
+                "resource": f"{base_url}/entrypoints/contract-helper/invoke",
+                "description": "Decode calldata, encode function calls, and lookup signatures",
                 "mimeType": "application/json",
                 "payTo": payment_address,
                 "maxTimeoutSeconds": 30,
                 "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",  # USDC on Base
-            },
-            {
-                "scheme": "exact",
-                "network": "base",
-                "maxAmountRequired": "20000",  # 0.02 USDC
-                "resource": f"{base_url}/entrypoints/encode/invoke",
-                "description": "Encode function call from signature and parameters",
-                "mimeType": "application/json",
-                "payTo": payment_address,
-                "maxTimeoutSeconds": 30,
-                "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
-            },
-            {
-                "scheme": "exact",
-                "network": "base",
-                "maxAmountRequired": "10000",  # 0.01 USDC
-                "resource": f"{base_url}/entrypoints/lookup/invoke",
-                "description": "Look up function signature by 4-byte selector",
-                "mimeType": "application/json",
-                "payTo": payment_address,
-                "maxTimeoutSeconds": 30,
-                "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
             }
         ]
     }
