@@ -120,6 +120,34 @@ class SignatureLookupRequest(BaseModel):
         }
 
 
+class InvokeRequest(BaseModel):
+    """Unified invoke request"""
+    action: str = Field(..., description="Action to perform: 'decode', 'encode', or 'lookup'")
+    calldata: Optional[str] = Field(None, description="For decode: hex-encoded calldata")
+    function_signature: Optional[str] = Field(None, description="For encode: function signature")
+    parameters: Optional[List[Any]] = Field(None, description="For encode: function parameters")
+    selector: Optional[str] = Field(None, description="For lookup: 4-byte function selector")
+
+    class Config:
+        json_schema_extra = {
+            "examples": [
+                {
+                    "action": "decode",
+                    "calldata": "0xa9059cbb000000000000000000000000742d35Cc6634C0532925a3b844Bc9e7595f0bEb00000000000000000000000000000000000000000000000000de0b6b3a7640000"
+                },
+                {
+                    "action": "encode",
+                    "function_signature": "transfer(address,uint256)",
+                    "parameters": ["0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb0", 1000000000000000000]
+                },
+                {
+                    "action": "lookup",
+                    "selector": "0xa9059cbb"
+                }
+            ]
+        }
+
+
 # API Endpoints
 @app.get("/health")
 async def health():
@@ -130,6 +158,56 @@ async def health():
         "version": "1.0.0",
         "free_mode": FREE_MODE
     }
+
+
+@app.post(
+    "/entrypoints/contract-helper/invoke",
+    summary="Unified Contract Helper Endpoint",
+    description="Unified endpoint for decode, encode, and lookup operations"
+)
+async def invoke(request: InvokeRequest):
+    """
+    Unified invoke endpoint for all contract helper operations
+
+    Actions:
+    - decode: Decode transaction calldata into human-readable format
+    - encode: Encode function call from signature and parameters
+    - lookup: Look up function signature by 4-byte selector
+    """
+    try:
+        if request.action == "decode":
+            if not request.calldata:
+                raise HTTPException(status_code=400, detail="calldata required for decode action")
+            logger.info(f"Decoding calldata: {request.calldata[:20]}...")
+            result = await calldata_decoder.decode_calldata(request.calldata)
+            return result
+
+        elif request.action == "encode":
+            if not request.function_signature or request.parameters is None:
+                raise HTTPException(status_code=400, detail="function_signature and parameters required for encode action")
+            logger.info(f"Encoding function: {request.function_signature}")
+            result = function_encoder.encode_function_call(request.function_signature, request.parameters)
+            if "error" in result:
+                raise HTTPException(status_code=400, detail=result["error"])
+            return result
+
+        elif request.action == "lookup":
+            if not request.selector:
+                raise HTTPException(status_code=400, detail="selector required for lookup action")
+            logger.info(f"Looking up selector: {request.selector}")
+            result = await signature_lookup.lookup_signature(request.selector)
+            if not result:
+                raise HTTPException(status_code=404, detail=f"Signature not found for selector: {request.selector}")
+            return result
+
+        else:
+            raise HTTPException(status_code=400, detail=f"Invalid action: {request.action}. Must be 'decode', 'encode', or 'lookup'")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Invoke error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Operation failed: {str(e)}")
 
 
 @app.post(
