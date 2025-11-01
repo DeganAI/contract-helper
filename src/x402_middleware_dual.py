@@ -153,13 +153,46 @@ class X402Middleware(BaseHTTPMiddleware):
                 {
                     "scheme": "exact",
                     "network": "base",
-                    "maxAmountRequired": "50000",  # 0.05 USDC (6 decimals)
+                    "maxAmountRequired": "20000",  # 0.02 USDC (6 decimals)
                     "resource": resource_url,
                     "description": description,
                     "mimeType": "application/json",
                     "payTo": self.payment_address,
                     "maxTimeoutSeconds": 30,
                     "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",  # USDC on Base
+                    "outputSchema": {
+                        "input": {
+                            "type": "http",
+                            "method": "POST",
+                            "bodyType": "json",
+                            "bodyFields": {
+                                "calldata": {
+                                    "type": "string",
+                                    "required": False,
+                                    "description": "Hex-encoded calldata to decode"
+                                },
+                                "function_signature": {
+                                    "type": "string",
+                                    "required": False,
+                                    "description": "Function signature for encoding"
+                                },
+                                "parameters": {
+                                    "type": "array",
+                                    "required": False,
+                                    "description": "Function parameters for encoding"
+                                },
+                                "selector": {
+                                    "type": "string",
+                                    "required": False,
+                                    "description": "4-byte function selector to lookup"
+                                }
+                            }
+                        },
+                        "output": {
+                            "type": "object",
+                            "description": "Decoded calldata, encoded function, or signature lookup result"
+                        }
+                    }
                 }
             ]
         }
@@ -204,7 +237,7 @@ class X402Middleware(BaseHTTPMiddleware):
         is_valid, error_message = await self.verify_payment(
             payment_header=payment_header,
             resource_url=str(request.url),
-            amount_required="50000"  # 0.05 USDC
+            amount_required="20000"  # 0.02 USDC
         )
 
         if not is_valid:
@@ -218,13 +251,27 @@ class X402Middleware(BaseHTTPMiddleware):
                     "accepts": [{
                         "scheme": "exact",
                         "network": "base",
-                        "maxAmountRequired": "50000",
+                        "maxAmountRequired": "20000",
                         "resource": str(request.url),
                         "description": "Payment required to access this resource",
                         "mimeType": "application/json",
                         "payTo": self.payment_address,
                         "maxTimeoutSeconds": 30,
                         "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+                        "outputSchema": {
+                            "input": {
+                                "type": "http",
+                                "method": "POST",
+                                "bodyType": "json",
+                                "bodyFields": {
+                                    "calldata": {"type": "string", "required": False, "description": "Hex-encoded calldata to decode"},
+                                    "function_signature": {"type": "string", "required": False, "description": "Function signature for encoding"},
+                                    "parameters": {"type": "array", "required": False, "description": "Function parameters for encoding"},
+                                    "selector": {"type": "string", "required": False, "description": "4-byte function selector to lookup"}
+                                }
+                            },
+                            "output": {"type": "object", "description": "Decoded calldata, encoded function, or signature lookup result"}
+                        }
                     }]
                 }
             )
